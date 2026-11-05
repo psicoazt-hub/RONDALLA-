@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#7a1f1f">
+<title>La Rondalla</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎸</text></svg>">
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f6f1ea;color:#111}
+#app{max-width:640px;margin:0 auto;padding:20px 16px calc(24px + env(safe-area-inset-bottom,0px));padding-top:calc(20px + env(safe-area-inset-top,0px))}
+h1{text-align:center;font-size:2.2rem;margin:.6em 0 .1em;color:#7a1f1f}
+h2{color:#7a1f1f;margin:.3em 0 .6em}
+.sub{text-align:center;font-size:1.2rem;margin:0 0 1.2em}
+button{font:inherit;padding:12px 14px;border:1px solid #7a1f1f;border-radius:10px;background:#fff;color:#7a1f1f;cursor:pointer;margin:4px 0}
+button.big{display:block;width:100%;padding:18px;font-size:1.15rem;background:#7a1f1f;color:#fff}
+button.ok{background:#7a1f1f;color:#fff}
+button.on{background:#7a1f1f;color:#fff}
+.row,.tabs,.bar{display:flex;gap:8px;flex-wrap:wrap}
+.row button,.tabs button,.bar button{flex:1}
+label{display:block;margin:12px 0 4px;font-weight:600}
+input,textarea{width:100%;font:inherit;padding:10px;border:1px solid #bbb;border-radius:8px;background:#fff}
+textarea{min-height:240px}
+.st{list-style:none;padding:0;margin:12px 0}
+.st li,.nm{display:block;width:100%;text-align:left;background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px;margin:5px 0;color:#000}
+button.nm.g{background:#2e9e4f;color:#fff;border-color:#2e9e4f}
+.g2{display:flex;gap:8px;align-items:center;margin:6px 0}
+.g2 span{flex:1}.g2 input{width:110px}
+.scroll{overflow-x:auto;margin:10px 0}
+table{border-collapse:collapse;min-width:100%;background:#fff}
+th,td{border:1px solid #ccc;padding:6px 8px;text-align:left;font-size:.9rem;white-space:nowrap}
+th{background:#ece3d6}
+td:last-child{white-space:normal}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const K='rondalla_db';
+let db=load(),cur=null,attDay=null,tab='att',per='d';
+function load(){try{return JSON.parse(localStorage.getItem(K))||{lists:{}}}catch(e){return{lists:{}}}}
+function save(){localStorage.setItem(K,JSON.stringify(db))}
+const $=s=>document.querySelector(s),app=$('#app');
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+const today=(d=new Date())=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const hm=t=>{const d=new Date(t);return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds())};
+const fmt=t=>today(new Date(t))+' '+hm(t);
+const parse=t=>[...new Set(t.split(/\r?\n/).map(s=>s.trim()).filter(Boolean))];
+const L=()=>db.lists[cur];
+const render=h=>{app.innerHTML=h;window.scrollTo(0,0)};
+
+function home(){cur=null;render(`<h1>La Rondalla</h1><p class=sub>¿Qué deseas hacer?</p>
+<button class=big onclick="create()">Crear lista</button>
+<button class=big onclick="pick('open')">Abrir existente</button>
+<button class=big onclick="pick('mod')">Modificar</button>`)}
+
+function create(){render(`<h2>Crear lista</h2>
+<label>Nombre de la lista</label><input id=nm>
+<label>Alumnos (un alumno y su grupo por renglón)</label><textarea id=tx placeholder="Pega aquí la lista"></textarea>
+<div class=row><button class=ok onclick="doCreate()">Crear</button><button onclick="home()">Cancelar</button></div>`)}
+function doCreate(){const n=$('#nm').value.trim(),s=parse($('#tx').value);
+if(!n||!s.length)return alert('Escribe el nombre de la lista y al menos un alumno.');
+const id='l'+Date.now().toString(36);db.lists[id]={id,name:n,students:s,att:{},grades:{},notes:[]};save();cur=id;work()}
+
+function pick(m){const ls=Object.values(db.lists);
+render(`<h2>${m=='open'?'Abrir existente':'Modificar'}</h2>`+(ls.length?ls.map(l=>`<button class=big onclick="${m=='open'?'openL':'modL'}('${l.id}')">${esc(l.name)}</button>`).join(''):'<p>Aún no hay listas creadas.</p>')+`<button onclick="home()">Volver</button>`)}
+function openL(id){cur=id;work()}
+function modL(id){cur=id;const l=L();render(`<h2>Modificar: ${esc(l.name)}</h2><label>Alumnos (uno por línea)</label><textarea id=tx>${esc(l.students.join('\n'))}</textarea>
+<div class=row><button class=ok onclick="doMod()">Aceptar</button><button onclick="home()">Cancelar</button></div>`)}
+function doMod(){const l=L(),s=parse($('#tx').value);if(!s.length)return alert('La lista no puede quedar vacía.');
+const gone=l.students.filter(x=>!s.includes(x));
+gone.forEach(x=>{delete l.grades[x];Object.values(l.att).forEach(a=>delete a.m[x])});
+l.notes=l.notes.filter(n=>!gone.includes(n.n));
+Object.values(l.att).forEach(a=>s.forEach(x=>{if(!(x in a.m))a.m[x]=0}));
+l.students=s;save();work()}
+
+function work(){const l=L();render(`<h2>${esc(l.name)}</h2>
+<div class=bar><button class=ok onclick="att()">Asistencia</button><button class=ok onclick="grades()">Calificación</button><button class=ok onclick="notesPick()">Notas</button><button class=ok onclick="dbv('att')">Base de Datos / Reportes</button></div>
+<ul class=st>${l.students.map(s=>`<li>${esc(s)}</li>`).join('')}</ul><button onclick="home()">Inicio</button>`)}
+
+function att(){const l=L();attDay=today();
+if(!l.att[attDay]){const m={};l.students.forEach(s=>m[s]=0);l.att[attDay]={ts:new Date().toISOString(),m};save()}
+drawAtt()}
+function drawAtt(){const l=L(),a=l.att[attDay];
+render(`<h2>Asistencia</h2><p>${attDay} · ${hm(a.ts)}</p>`+l.students.map((s,i)=>`<button class="nm ${a.m[s]?'g':''}" onclick="mark(${i})">${esc(s)}</button>`).join('')+`<button class="ok big" onclick="endAtt()">Aceptar</button>`)}
+function mark(i){const l=L(),s=l.students[i];l.att[attDay].m[s]=1;save();drawAtt()}
+function endAtt(){alert('Asistencia guardada.');work()}
+
+function grades(){const l=L();render(`<h2>Calificaciones</h2>`+l.students.map((s,i)=>`<div class=g2><span>${esc(s)}</span><input type=number step=any inputmode=decimal id=g${i} value="${esc(l.grades[s]??'')}"></div>`).join('')+`<div class=row><button class=ok onclick="saveG()">Guardar</button><button onclick="work()">Volver</button></div>`)}
+function saveG(){const l=L();l.students.forEach((s,i)=>{const v=$('#g'+i).value;if(v==='')delete l.grades[s];else l.grades[s]=v});save();alert('Calificaciones guardadas.');work()}
+
+function notesPick(){const l=L();render(`<h2>Notas: elige alumno</h2>`+l.students.map((s,i)=>`<button class=nm onclick="noteForm(${i})">${esc(s)}</button>`).join('')+`<button onclick="work()">Cancelar</button>`)}
+function noteForm(i){const s=L().students[i];render(`<h2>Nota para ${esc(s)}</h2><textarea id=tx placeholder="Escribe la nota"></textarea><div class=row><button class=ok onclick="saveN(${i})">Aceptar</button><button onclick="work()">Cancelar</button></div>`)}
+function saveN(i){const t=$('#tx').value.trim();if(!t)return alert('Escribe la nota.');
+L().notes.push({n:L().students[i],ts:new Date().toISOString(),t});save();work()}
+
+function inR(k,p){if(p=='all')return true;const[y,m,d]=k.split('-').map(Number),n=new Date(),
+diff=Math.round((new Date(n.getFullYear(),n.getMonth(),n.getDate())-new Date(y,m-1,d))/864e5);
+return p=='d'?diff==0:p=='w'?diff>=0&&diff<7:y==n.getFullYear()}
+function attData(l,p){const ks=Object.keys(l.att).sort().filter(k=>inR(k,p));
+return[['Alumno',...ks.map(k=>k+' '+hm(l.att[k].ts))],...l.students.map(s=>[s,...ks.map(k=>l.att[k].m[s]?'✓':'✗')])]}
+const grData=l=>[['Alumno','Calificación'],...l.students.map(s=>[s,l.grades[s]??''])];
+const ntData=(l,p)=>[['Alumno','Fecha y hora','Nota'],...l.notes.filter(n=>inR(today(new Date(n.ts)),p)).map(n=>[n.n,fmt(n.ts),n.t])];
+
+function dbv(t,p){tab=t||tab;per=p||per;const l=L();
+const rows=tab=='att'?attData(l,per):tab=='gr'?grData(l):ntData(l,per);
+const empty=tab=='att'?rows[0].length<2:tab=='nt'&&rows.length<2;
+const mk=(arr,cur,fn)=>`<div class=tabs>${arr.map(([k,n])=>`<button class="${cur==k?'on':''}" onclick="${fn(k)}">${n}</button>`).join('')}</div>`;
+render(`<h2>${esc(l.name)}</h2>`+mk([['att','Asistencias'],['gr','Calificaciones'],['nt','Notas']],tab,k=>`dbv('${k}')`)
++(tab!='gr'?mk([['d','Diario'],['w','Semanal'],['y','Anual']],per,k=>`dbv(null,'${k}')`):'')
++`<div class=scroll><table>${rows.map((r,i)=>`<tr>${r.map(c=>i?`<td>${esc(c)}</td>`:`<th>${esc(c)}</th>`).join('')}</tr>`).join('')}</table></div>`
++(empty?'<p>Sin registros en este periodo.</p>':'')
++`<div class=row><button class=ok onclick="xls()">Exportar Excel (.xls)</button><button onclick="bak()">Respaldo JSON</button></div><button onclick="work()">Volver</button>`)}
+
+function dl(name,txt,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove()}
+function xls(){const l=L(),sh=(n,r)=>`<Worksheet ss:Name="${n}"><Table>${r.map(x=>`<Row>${x.map(c=>`<Cell><Data ss:Type="String">${esc(c)}</Data></Cell>`).join('')}</Row>`).join('')}</Table></Worksheet>`;
+dl(l.name.replace(/[^\w\-]+/g,'_')+'.xls','<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'+sh('Asistencias',attData(l,'all'))+sh('Calificaciones',grData(l))+sh('Notas',ntData(l,'all'))+'</Workbook>','application/vnd.ms-excel')}
+function bak(){dl('rondalla-respaldo-'+today()+'.json',JSON.stringify(db,null,2),'application/json')}
+
+if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+home();
+</script>
+</body>
+</html>
